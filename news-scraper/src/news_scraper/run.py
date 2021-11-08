@@ -1,19 +1,9 @@
 """
-This is a skeleton file that can serve as a starting point for a Python
-console script. To run this script uncomment the following lines in the
-``[options.entry_points]`` section in ``setup.cfg``::
-
-    console_scripts =
-         fibonacci = news_scraper.skeleton:run
-
 Then run ``pip install .`` (or ``pip install -e .`` for editable mode)
 which will install the command ``fibonacci`` inside your current environment.
 
 Besides console scripts, the header (i.e. until ``_logger``...) of this file can
 also be used as template for Python modules.
-
-Note:
-    This skeleton file can be safely removed if not needed!
 
 References:
     - https://setuptools.readthedocs.io/en/latest/userguide/entry_point.html
@@ -23,37 +13,20 @@ References:
 import argparse
 import logging
 import sys
+import os
+import datetime
 
 from news_scraper import __version__
+
+from news_scraper import db_wrapper
+from news_scraper import guardian_scraper
+from news_scraper import helpers
 
 __author__ = "lilstipher"
 __copyright__ = "lilstipher"
 __license__ = "MIT"
 
 _logger = logging.getLogger(__name__)
-
-
-# ---- Python API ----
-# The functions defined in this section can be imported by users in their
-# Python scripts/interactive interpreter, e.g. via
-# `from news_scraper.skeleton import fib`,
-# when using this Python module as a library.
-
-
-def fib(n):
-    """Fibonacci example function
-
-    Args:
-      n (int): integer
-
-    Returns:
-      int: n-th Fibonacci number
-    """
-    assert n > 0
-    a, b = 1, 1
-    for _i in range(n - 1):
-        a, b = b, a + b
-    return a
 
 
 # ---- CLI ----
@@ -78,7 +51,6 @@ def parse_args(args):
         action="version",
         version="news-scraper {ver}".format(ver=__version__),
     )
-    parser.add_argument(dest="n", help="n-th Fibonacci number", type=int, metavar="INT")
     parser.add_argument(
         "-v",
         "--verbose",
@@ -94,6 +66,13 @@ def parse_args(args):
         help="set loglevel to DEBUG",
         action="store_const",
         const=logging.DEBUG,
+    )
+    parser.add_argument(
+        "-c",
+        "--config",
+        dest="config",
+        help="set config file",
+        type=str
     )
     return parser.parse_args(args)
 
@@ -118,13 +97,66 @@ def main(args):
 
     Args:
       args (List[str]): command line parameters as list of strings
-          (for example  ``["--verbose", "42"]``).
+          (for example  ``["--verbose", "confi.yaml"]``).
     """
     args = parse_args(args)
     setup_logging(args.loglevel)
-    _logger.debug("Starting crazy calculations...")
-    print("The {}-th Fibonacci number is {}".format(args.n, fib(args.n)))
-    _logger.info("Script ends here")
+    # Open config file
+    if args.config:
+        config = helpers.get_config(_logger, args.config)
+    else:
+        config_path = os.path.dirname(os.path.abspath(__file__))
+        default_conf = os.path.join(config_path, "config/config.yaml")
+        config = helpers.get_config(_logger, default_conf)
+    
+    #Connect to db
+
+    try:
+        db_conn = db_wrapper.DbWrapper(config["configs"]["database"]).client
+    except Exception as err:
+        _logger.error("Db connection error. Reason : {}".format(err))
+        exit(1) #Exit if no db
+
+    # load guardian scraper
+    if config["configs"]["scrapers"]["guardian"]:
+        #Load config
+        guardian = config["configs"]["scrapers"]["guardian"]
+        dates = guardian.get('scraping_dates', None)
+        if dates is None:
+            _logger.warn("No dates, using current date")
+            date = datetime.datetime.today()
+            date = date.replace(minute=0, hour=0, second=0)
+            dates = [ date ]
+        else :
+            dates = [ datetime.datetime.strptime(date.strip(), '%Y/%m/%d') for date in dates]
+
+        _logger.info("scraping_dates: {}".format(dates))
+
+        categories = guardian.get('categories', None)
+        _logger.info("categories: {}".format(categories))
+
+        limit = guardian.get('limit', None)
+        _logger.info("limit = {}".format(limit))
+
+        #Scrap data
+        guardian_scrapers_list = [ guardian_scraper.GuardianScraper(date,categories) for date in dates]
+        guardian_news = helpers.flatten([ scraper.get_news(limit=limit) for scraper in guardian_scrapers_list])
+        _logger.debug("Some news ? {}".format(guardian_news[0].__dict__))
+        
+        # Store news 
+
+        news_db = db_conn.news
+        news_collection = news_db.news
+        for news in guardian_news:
+            check = news_collection.find_one({ "publication_date": news.publication_date,"url":news.url })
+            if not check: #save if dont exists
+                news_collection.insert_one(news.__dict__)
+                _logger.info(check)
+            else : 
+                _logger.info("These news already scraped")
+
+
+    _logger.info("Good Bye")
 
 
 def run():
@@ -144,6 +176,6 @@ if __name__ == "__main__":
     # After installing your project with pip, users can also run your Python
     # modules as scripts via the ``-m`` flag, as defined in PEP 338::
     #
-    #     python -m news_scraper.skeleton 42
+    #     python -m news_scraper.run -vv
     #
     run()

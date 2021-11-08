@@ -1,0 +1,13 @@
+configs:
+  scrapers:
+    guardian:
+      scraping_dates:
+        - "2021/10/7"
+        - "2021/10/6"
+      categories:
+        - "world"
+      limit: 1
+  database:
+    type: "mongodb"
+    host: "localhost"
+    port: 27017
