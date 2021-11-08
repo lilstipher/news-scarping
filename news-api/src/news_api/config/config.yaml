@@ -1,0 +1,7 @@
+configs:
+  database:
+    type: "mongodb"
+    host: "localhost"
+    port: 27017
+  logging:
+    level: 10
