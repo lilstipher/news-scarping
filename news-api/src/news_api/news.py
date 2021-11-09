@@ -1,7 +1,5 @@
 import datetime
-import json
-from os import symlink
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 
 

@@ -42,6 +42,8 @@ BASE_PATH = "/api/v0"
 
 @app.on_event("startup")
 def startup_event():
+    """Run before server startup
+    """
     _logger.info(config)
     try:
         news_collection.create_index([('content', 'text')])
@@ -51,34 +53,61 @@ def startup_event():
 
 @app.get(BASE_PATH+"/version", response_model=dict)
 async def get_version():
+    """api version
+    """
     return {"api": "news-api", "version": "{ver}".format(ver=__version__)}
 
 
 @app.get(BASE_PATH+"/db/config", response_model=dict)
 async def get_config():
+    """api config
+    """
     return config
 
 
 @app.get(BASE_PATH+"/news/providers/{provider}", response_model=list[news.News])
-async def get_all_news_by_provider(provider:str):
-    news_list = [news_obj for news_obj in news_collection.find({'website':provider})]
+async def get_all_news_by_provider(provider: str) -> list[news.News]:
+    """Return all news for a specific provider in the database
+
+    Args:
+        provider (str): news provider. Ex: guardian
+
+    Returns:
+        list[news.News]: list of news 
+    """
+    news_list = [news_obj for news_obj in news_collection.find({'website': provider})]
 
     _logger.debug(news_list)
     return news_list
 
+
 @app.get(BASE_PATH+"/news/all", response_model=list[news.News])
-async def get_all_news():
+async def get_all_news() -> list[news.News]:
+    """Return all news in the database
+
+    Returns:
+        list[news.News]: list of news 
+    """
     news_list = [news_obj for news_obj in news_collection.find({})]
 
     _logger.debug(news_list)
     return news_list
 
+
 @app.get(BASE_PATH+"/news/search/all", response_model=list[news.News])
-async def search_all_news( query: str):
+async def search_all_news(query: str) -> list[news.News]:
+    """Search news
+
+    Args:
+        query (str): query
+
+    Returns:
+        list[news.News]: list of news 
+    """
     news_list = []
-    if query :
-        news_list = [news_obj for news_obj in news_collection.find({"$text": {"$search": query }})]
+    if query:
+        news_list = [news_obj for news_obj in news_collection.find(
+            {"$text": {"$search": query}})]
 
     _logger.debug(news_list)
     return news_list
-
