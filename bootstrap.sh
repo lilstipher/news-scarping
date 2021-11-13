@@ -17,8 +17,8 @@ echo "Setting up projects requirements"
 pip install -U pip setuptools setuptools_scm tox
 
 echo "Install projects deps.."
-cd news-api && pip install e . && cd ..
-cd news-scraper && pip install e . && cd ..
+cd news-api && pip install -e . && cd ..
+cd news-scraper && pip install -e . && cd ..
 echo "Current Path: $(pwd)"
 
 echo "Run scraper"
